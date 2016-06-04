@@ -1,0 +1,47 @@
+---
+title: "Test Report"
+author: "Hamish McWilliam"
+date: "4 June 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# SQLite database filename
+dbFilename = 'C:/VBox_share/NAS.sqlite'
+
+# Open a connection to the SQLite database
+library(DBI)
+dbConn = dbConnect(drv=RSQLite::SQLite(), dbname=dbFilename)
+```
+
+## File Extensions
+
+```{r file_extensions}
+fileExtensions = dbGetQuery(dbConn, 'SELECT fileExtension, COUNT(fileExtension) FROM files GROUP BY fileExtension;')
+nrow(fileExtensions)
+```
+
+## MIME Types
+
+```{r mime_types}
+mimeTypes = dbGetQuery(dbConn, 'SELECT MIMEType, COUNT(MIMEType) FROM files GROUP BY MIMEType;')
+nrow(mimeTypes)
+```
+
+## Checksums/digests
+
+```{r digests}
+md5Digests = dbGetQuery(dbConn, 'SELECT MD5, COUNT(MD5) FROM files GROUP BY MD5;')
+nrow(md5Digests)
+sha256Digests = dbGetQuery(dbConn, 'SELECT SHA256, COUNT(SHA256) FROM files GROUP BY SHA256;')
+nrow(sha256Digests)
+```
+
+```{r}
+# Disconnect from database to free resources
+dbDisconnect(dbConn)
+```
