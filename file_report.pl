@@ -252,6 +252,15 @@ CREATE TABLE source(
 	print STDERR $dbh->errstr, "\n";
     }
     $dbh->do(q{
+CREATE TABLE directories(
+  dirName TEXT PRIMARY KEY,
+  numFiles INT
+);
+});
+    if($dbh->err) {
+	print STDERR $dbh->errstr, "\n";
+    }
+    $dbh->do(q{
 CREATE TABLE files(
   fullFilename TEXT PRIMARY KEY,
   mtime TEXT,
@@ -379,6 +388,29 @@ INSERT OR REPLACE INTO files($names) VALUES ($qTemplate);
 });
     $tmpSth->execute(values(%$colValues)) or die $dbh->errstr;
     &print_debug_message('add_files', 'End', 11);
+}
+
+=head2 add_directories()
+
+Add/update database table C<directories>.
+
+  &add_directories($dbh, $colValues_hash);
+
+=cut
+
+sub add_directories {
+    &print_debug_message('add_directories', 'Begin', 11);
+    my $dbh = shift;
+    my $colValues = shift;
+    &print_debug_message('add_directories', 'colValues: ' . Dumper($colValues), 2);
+    my ($names, $qTemplate) = &prepare_row_data($colValues);
+    &print_debug_message('add_directories', 'names: ' . Dumper($names), 13);
+    # Insert new row.
+    my $tmpSth = $dbh->prepare(qq{
+INSERT OR REPLACE INTO directories($names) VALUES ($qTemplate);
+});
+    $tmpSth->execute(values(%$colValues)) or die $dbh->errstr;
+    &print_debug_message('add_directories', 'End', 11);
 }
 
 =head2 checksums()
@@ -692,6 +724,17 @@ sub wanted {
 	    #"\t", $dirname, "\t", $filename,
 	    #"\t", ($metadata->{'Author'} || $metadata->{'Artist'}),
 	    #"\t", ($metadata->{'Title'} || $metadata->{'Description'} || $metadata->{'ImageDescription'}),
+	    "\n");
+    }
+    elsif($stat_data && -d $stat_data) {
+	my $rel_dirname = $File::Find::name;
+	my $colValues = {
+	    'dirName' => $rel_dirname,
+	    #'numFiles' => 0
+	};
+	&add_directories($dbh, $colValues);
+	print(
+	    $rel_dirname,
 	    "\n");
     }
     &print_debug_message('wanted', 'End', 11);
