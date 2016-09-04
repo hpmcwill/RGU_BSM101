@@ -126,6 +126,18 @@ sub close_db {
 
 ### Database schema
 #
+# CREATE TABLE source(
+#  sourceId INTEGER PRIMARY KEY AUTOINCREMENT,
+#  Make TEXT,
+#  Model TEXT,
+#  Software TEXT,
+#  FileSource TEXT,
+#  SerialNumber TEXT
+# );
+# CREATE TABLE directories(
+#  dirName TEXT PRIMARY KEY,
+#  numFiles INT
+# );
 # CREATE TABLE files(
 #  fullFilename TEXT PRIMARY KEY,
 #  mtime TEXT,
@@ -144,6 +156,7 @@ sub close_db {
 #  Comment TEXT,
 #  Copyright TEXT,
 #  sourceId INTEGER,
+#  FOREIGN KEY(dirName) REFERENCES directories(dirName)
 #  FOREIGN KEY(sourceId) REFERENCES source(sourceId)
 #);
 
@@ -207,10 +220,10 @@ $ret_data = $sth0->fetchall_arrayref( [0] );
 print '# Total unique file extensions: ' . $ret_data->[0]->[0] . "\n";
 $sth0->finish();
 
-# Total directories.
+# Total directories (use 'directories' table to include empty directories)
 $sth0 = $dbh->prepare(qq{
 SELECT COUNT(*) FROM (
-  SELECT DISTINCT dirName FROM files
+  SELECT DISTINCT dirName FROM directories
 ) T;
 });
 $sth0->execute() or die $dbh->errstr;
