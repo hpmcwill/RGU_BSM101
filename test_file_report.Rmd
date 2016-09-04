@@ -9,31 +9,117 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-```{r}
+```{r db_connect}
 # SQLite database filename
-dbFilename = 'C:/VBox_share/NAS.sqlite'
+dbFilename <- 'C:/VBox_share/NAS.sqlite'
 
 # Open a connection to the SQLite database
 library(DBI)
 dbConn = dbConnect(drv=RSQLite::SQLite(), dbname=dbFilename)
 ```
 
+## Basic Filesystem Information
+
+Total number of files:
+```{r totalNumberOfFiles}
+totalNumberOfFiles <- dbGetQuery(dbConn, 'SELECT COUNT(fullFilename) FROM files;')
+print(totalNumberOfFiles)
+```
+
+Total number of directories:
+```
+# TODO: requires directory information to be added to database
+```
+
+Total file size:
+```{r fileSizes}
+# Cast required to avoid issues with number truncation due to use of 32-bit integers.
+fileSizes <- dbGetQuery(dbConn, 'SELECT cast(sizeKb AS TEXT) FROM files;')
+fileSizes['sizeKb'] <- as.numeric(fileSizes[,'cast(sizeKb AS TEXT)']) / 1000
+
+print(sum(fileSizes['sizeKb']))
+```
+
+Summary statistics for file sizes:
+```{r fileSizes_summary}
+print(summary(fileSizes['sizeKb']))
+```
+
+Distribution of file sizes:
+```{r fileSizes_distribution}
+hist(log(fileSizes$sizeKb, 2), freq=TRUE)
+```
+
 ## File Extensions
 
+Number of unique file extensions:
 ```{r file_extensions}
-fileExtensions = dbGetQuery(dbConn, 'SELECT fileExtension, COUNT(fileExtension) FROM files GROUP BY fileExtension;')
+fileExtensions <- dbGetQuery(dbConn, 'SELECT fileExtension, COUNT(fileExtension) FROM files GROUP BY fileExtension;')
 nrow(fileExtensions)
+```
+
+Summary statistics for file extensions:
+```{r}
+summary(fileExtensions$`COUNT(fileExtension)`)
+```
+
+```{r}
+# TODO histogram of file extension frequencies.
+hist(log(fileExtensions$`COUNT(fileExtension)`, 10), freq=TRUE)
+```
+
+Most common file extensions:
+```{r}
+fileExtensions_sorted <- fileExtensions[order(fileExtensions$`COUNT(fileExtension)`, decreasing=TRUE),]
+( popular_fileExtensions <- head(fileExtensions_sorted, n=10) )
 ```
 
 ## MIME Types
 
+Number of unique MIME types:
 ```{r mime_types}
 mimeTypes = dbGetQuery(dbConn, 'SELECT MIMEType, COUNT(MIMEType) FROM files GROUP BY MIMEType;')
 nrow(mimeTypes)
 ```
 
+```{r}
+# TODO histogram of MIME type frequencies
+hist(log(mimeTypes$`COUNT(MIMEType)`, 10), freq=TRUE)
+```
+
+For the most commonly occurring MIME types determine the cumulative data size:
+```{r mime_types_size}
+mimeTypes_sorted <- mimeTypes[order(mimeTypes[2], decreasing=TRUE),]
+( popular_mimeTypes <- head(mimeTypes_sorted, n=10) )
+
+sizeStats <- function(mimeType) {
+  # Map file sizes to numeric to avoid issues with 32-bit integers
+  tmpQuery <- paste('SELECT SHA256, cast(sizeKb AS TEXT) FROM files WHERE MIMEType IS \'', mimeType, '\';', sep='')
+  tmpResult <- dbGetQuery(dbConn, tmpQuery)
+  tmpResult['sizeKb'] <- as.numeric(tmpResult[,'cast(sizeKb AS TEXT)']) / 1000
+  
+  # All files
+  print(nrow(tmpResult))
+  print(sum(tmpResult['sizeKb']))
+  print(summary(tmpResult['sizeKb']))
+
+  # Unique files
+  tmpResult <- unique(tmpResult)
+  print(nrow(tmpResult))
+  print(sum(tmpResult['sizeKb']))
+  print(summary(tmpResult['sizeKb']))
+}
+
+for(i in seq(10)) {
+  mimeType <- popular_mimeTypes[i, 1]
+  print(mimeType)
+  sizeStats(mimeType)
+}
+```
+
 ## Checksums/digests
 
+Number of unique files, using each checksum/digest method:
 ```{r digests}
 md5Digests = dbGetQuery(dbConn, 'SELECT MD5, COUNT(MD5) FROM files GROUP BY MD5;')
 nrow(md5Digests)
@@ -41,7 +127,25 @@ sha256Digests = dbGetQuery(dbConn, 'SELECT SHA256, COUNT(SHA256) FROM files GROU
 nrow(sha256Digests)
 ```
 
-```{r}
+```
+# TODO histogram of checksum occurance frequencies
+  # Plot the Global Active Power data as a histogram.
+  hist(data$Global_active_power, col='red', main='Global Active Power', 
+       xlab='Global Active Power (kilowatts)')
+
+```
+
+## Close the database and clean-up
+
+```{r db_disconnect}
 # Disconnect from database to free resources
 dbDisconnect(dbConn)
 ```
+
+## TODO
+
+* Media intersction. For example: are all the files on an SD card also on the NAS?
+* Distribution of file-types
+* Distribution of file extensions
+* Distribution of file sizes
+* Frequency Distribution of duplication
