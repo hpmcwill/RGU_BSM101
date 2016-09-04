@@ -29,7 +29,8 @@ use Data::Dumper;                 # Debug output
 ### Default values
 my $scriptName = basename($0, ());
 my $digest_method = 'SHA256';
-my ($do_usage, $do_verbose);
+my ($do_usage, $do_verbose, $outfile_name);
+my $OUTFILE;
 # Debug output level
 my $debugLevel = 0;
 # SQLite database file name for query database.
@@ -45,11 +46,13 @@ Output help/usage message.
 
 sub usage {
     print STDERR <<EOF
-Usage: $scriptName <-dbfile query_database> <search_databases...>
+Usage: $scriptName [-dbfile query_database] [-o outfile] <search_databases...>
  
  -c <method>               Checksum/digest method [$digest_method]
                            Methods: 'MD5', 'SHA-1', 'SHA-256'
  -dbfile <dbfile>          Database filename [$QUERY_DBFILENAME]
+ -o <outfile>           Output file for list of files specific to the
+                           query database
  -v                        Verbose output			   
 
  -h                        Help/usage message.
@@ -63,6 +66,8 @@ unless (&GetOptions(
 	     'checksum|c=s'   => \$digest_method,
 	     # SQLite database file.
 	     'dbfile=s'       => \$QUERY_DBFILENAME,
+	     # Output file name.
+	     'output|o=s'     => \$outfile_name,
 	     # Verbose output
 	     'verbose|v'      => \$do_verbose,
 	     # Debug output level
@@ -168,14 +173,22 @@ if($search_db_notfound > 0) {
     die "Unable to access $search_db_notfound search databases [abort]";
 }
 
+# Open output file if required.
+if($outfile_name) {
+    open($OUTFILE, '>', $outfile_name) or
+	die 'Unable to open output file ($!)';
+}
+
 # Open query database.
 print '# Query database: ', $QUERY_DBFILENAME, "\n";
+print $OUTFILE 'QD', "\t", $QUERY_DBFILENAME, "\n" if($OUTFILE);
 my $query_dbh = &open_db_ro($QUERY_DBFILENAME);
 #$query_dbh->{TraceLevel} = '1|SQL';
 # Open search databases.
 my (@search_dbh_list) = ();
 foreach my $search_db_filename (@ARGV) {
     print '# Search database: ', $search_db_filename, "\n";
+    print $OUTFILE 'SD', "\t", $search_db_filename, "\n" if($OUTFILE);
     push(@search_dbh_list, &open_db_ro($search_db_filename));
 }
 
@@ -209,22 +222,26 @@ while( my $query0_row_hash = $query_sth0->fetchrow_hashref() ) {
     foreach my $search_sth (@search_sth_list) {
 	$search_sth->execute($checksumValue) or die $search_sth->errstr;
 	my $row_array = $search_sth->fetchrow_arrayref();
-	#&print_debug_message('main', Dumper($row_array), 1);
 	$checksum_found_count += $row_array->[0] if($row_array);
     }
     # Report unique files.
     if($checksum_found_count < 1) {
 	$counters{'match_not_found'}++;
-	if($do_verbose) {
+	if($do_verbose) { # Verbose output
 	    print "$digest_method $checksumValue not overlapping\n";
 	}
 	$query_sth1->execute($checksumValue) or die $query_dbh->errstr;
-	my $file_list = $query_sth1->fetchall_arrayref( [0] );
-	#print Dumper($file_list), "\n";
+	my $file_list = $query_sth1->fetchall_arrayref([0]);
 	$counters{'files_not_matched'} += scalar(@$file_list);
-	if($do_verbose) {
-	    foreach my $filename (sort(@$file_list)) {
+	if($do_verbose) { # Verbose output
+	    foreach my $filename (sort(@{$file_list->[0]})) {
 		print '= ' . $filename . "\n";
+	    }
+	}
+	if($OUTFILE) { # Log file names to file.
+	    print $OUTFILE 'CK', "\t", $checksumValue, "\n";
+	    foreach my $filename (sort(@{$file_list->[0]})) {
+		print $OUTFILE 'FI', "\t", $filename, "\n";
 	    }
 	}
     }
@@ -248,6 +265,11 @@ foreach my $search_dbh (@search_dbh_list) {
 $query_sth0->finish();
 $query_sth1->finish();
 &close_db($query_dbh);
+
+# Close the output file
+if($OUTFILE) {
+    close($OUTFILE);
+}
 
 =head1 VERSION
 
