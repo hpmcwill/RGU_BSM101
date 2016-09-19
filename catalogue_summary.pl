@@ -18,6 +18,11 @@ Produce a summary report for a catalogue database.
 # Enable Perl warnings
 use warnings;
 use strict;
+# Enable UNICODE support
+use utf8;
+use feature 'unicode_strings';
+use open ':encoding(utf8)'; # Use UTF-8 encoding for data files.
+use open ':std'; # Also use UTF-8 for STDIN, STDOUT and STDERR.
 
 # Load modules
 use Getopt::Long;                 # Command-line argument handling
@@ -245,13 +250,14 @@ $sth0->finish();
 # File sizes
 $sth0 = $dbh->prepare(qq{
 SELECT MIN(sizeBytes) AS minSize, MAX(sizeBytes) AS maxSize,
-  AVG(sizeBytes) AS meanSize FROM files;
+  AVG(sizeBytes) AS meanSize, SUM(sizeBytes) AS sumSize FROM files;
 });
 $sth0->execute() or die $dbh->errstr;
 $ret_data = $sth0->fetchall_arrayref();
 print '# Minimum file size: ' . $ret_data->[0]->[0] . "\n";
 print '# Maximum file size: ' . $ret_data->[0]->[1] . "\n";
 print '# Mean file size: ' . $ret_data->[0]->[2] . "\n";
+print '# Sum file size: ' . $ret_data->[0]->[3] . "\n";
 $sth0->finish();
 
 # Total data sources (from meta-data)
