@@ -22,6 +22,10 @@ Merge a set of filesystem catalogue databases into a single database.
 # Enable Perl warnings
 use warnings;
 use strict;
+# Enable UNICODE support
+use utf8;
+use feature 'unicode_strings';
+use open ':encoding(utf8)';
 
 # Load modules
 use DBI;                          # Database interface.
@@ -31,7 +35,7 @@ use Getopt::Long;                 # Command-line argument handling
 
 ### Default values
 my $scriptName = basename($0, ());
-my ($do_usage);
+my ($do_usage, $do_verbose);
 # Debug output level
 my $debugLevel = 0;
 # SQLite database file name.
@@ -51,6 +55,7 @@ Usage: $scriptName [-o target_db] <source_dbs...>
  
  -o <target_db>            Target database filename [$TARGETDBFILENAME]
 
+ -v                        Verbose output
  -h                        Help/usage message.
 EOF
 ;
@@ -60,6 +65,8 @@ EOF
 unless (&GetOptions(
 	     # SQLite database file.
 	     'targetdb|o=s'   => \$TARGETDBFILENAME,
+	     # Verbose output
+	     'verbose|v'      => \$do_verbose,
 	     # Debug output level
 	     'debug=i'        => \$debugLevel,
 	     # Usage/help message
@@ -106,6 +113,8 @@ sub open_db {
     $dbh = DBI->connect("dbi:SQLite:dbname=$DBFILENAME", "", "",
 			{
 			    RaiseError => 1,
+			    PrintError => 1,
+			    ShowErrorStatement => 1,
 			    AutoCommit => 1,
 			});
     $dbh->sqlite_busy_timeout(60000); # 1 min.
@@ -204,8 +213,8 @@ CREATE TABLE files(
   MD5 TEXT NOT NULL,
   SHA256 TEXT NOT NULL,
   MIMEType TEXT NOT NULL,
-  dirName TEXT,
-  fileName TEXT,
+  dirName TEXT NOT NULL,
+  fileName TEXT NULL NULL,
   fileExtension TEXT,
   fileType TEXT,
   Author TEXT,
@@ -377,9 +386,9 @@ INSERT INTO files ($colNames) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);
 	if(defined($dataref) && defined($dataref->[-1])) {
 	    $dataref->[-1] = $mapping->{$dataref->[-1]};
 	}
-	#if($row_count % 250 == 0) {
-	#    #print $row_count, ': ', Dumper($dataref), "\n";
-	#}
+	if($do_verbose && ($row_count % 250 == 0)) {
+	    print $row_count, ': ', $dataref->[0], "\n";
+	}
 	return $dataref;
     };
     my @tuple_status;
@@ -397,6 +406,9 @@ INSERT INTO files ($colNames) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);
 # Create target database, checking for existing file.
 &init_db($TARGETDBFILENAME);
 my $target_dbh = &open_db($TARGETDBFILENAME);
+if($debugLevel > 9) { # Enable SQL query reporting
+    $target_dbh->{TraceLevel} = '1|SQL';
+}
 
 # For each source database...
 foreach my $source_db_filename (@ARGV) {
