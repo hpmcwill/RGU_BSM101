@@ -19,6 +19,10 @@ set of databases.
 # Enable Perl warnings
 use warnings;
 use strict;
+# Enable UNICODE support
+use utf8;
+use feature 'unicode_strings';
+use open ':encoding(utf8)';
 
 # Load modules
 use Getopt::Long;                 # Command-line argument handling
