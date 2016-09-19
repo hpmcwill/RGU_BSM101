@@ -30,6 +30,10 @@ Build a file catalogue based on file properties.
 # Enable warnings
 use warnings;
 use strict;
+# Enable UNICODE support
+use utf8;
+use feature 'unicode_strings';
+use open ':encoding(utf8)'; # Use UTF-8 encoding for data files.
 
 # Load modules
 use Digest;                       # Message digest/checksum calculation
@@ -42,7 +46,6 @@ use POSIX qw(strftime);           # Time/date formatting
 use DBI;                          # Database interface.
 use Image::ExifTool qw(:Public);  # Metadata access
 use Data::Dumper;                 # Debug output
-
 
 # Find and load method to get MIME type for a file.
 my $mime_method = -1;
@@ -270,8 +273,8 @@ CREATE TABLE files(
   MD5 TEXT NOT NULL,
   SHA256 TEXT NOT NULL,
   MIMEType TEXT NOT NULL,
-  dirName TEXT,
-  fileName TEXT,
+  dirName TEXT NOT NULL,
+  fileName TEXT NOT NULL,
   fileExtension TEXT,
   fileType TEXT,
   Author TEXT,
@@ -279,6 +282,7 @@ CREATE TABLE files(
   Comment TEXT,
   Copyright TEXT,
   sourceId INTEGER,
+  FOREIGN KEY(dirName) REFERENCES directories(dirName)
   FOREIGN KEY(sourceId) REFERENCES source(sourceId)
 );
 });
@@ -442,6 +446,7 @@ sub checksums {
 	    warn "Unable to read $rel_filename ($!)";
 	    $checksums{$d_method} = '0';
 	} else {
+	    binmode($FH); # Read file as binary data (i.e. bytes)
 	    $digest->addfile($FH);
 	    close($FH);
 	    $checksums{$d_method} = $digest->hexdigest();
@@ -614,6 +619,20 @@ sub file_metadata {
 	# Get the value of a specified tag
 	my $value = $exifTool->GetValue($tag);
 	if($value) {
+	    # Trim any leading or trailing whitespace.
+	    $value =~ s/^\s+//;
+	    $value =~ s/\s+$//;
+	    # The SerialNumber field is often corrupted, indicated by presence
+	    # of control characters... so null the field if unprintables are
+	    # present.
+	    if($tag eq 'SerialNumber' && $value =~ m/\P{XPosixPrint}/) {
+		$value = undef;
+	    }
+	    # For other fields, just attempt to remove unprintable characters.
+	    else {
+		$value =~ s/\P{XPosixPrint}//g;
+	    }
+	    # Store value in return hash.
 	    $metadata->{$tag} = $value;
 	}
     }
